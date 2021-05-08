@@ -44,6 +44,7 @@ type QueryParam struct {
 	WantUnicastResponse  bool                 // Unicast response desired, as per 5.4 in RFC
 	AllowPartialResponse bool                 // Don't try and fill missing fields
 	QueryType            uint16               // Query type, default dns.PTR
+	RecursionDesired     bool                 // Set recursion desired
 }
 
 // DefaultParams is used to return a default set of QueryParam's
@@ -223,7 +224,7 @@ func (c *client) query(params *QueryParam) error {
 	if params.WantUnicastResponse {
 		m.Question[0].Qclass |= 1 << 15
 	}
-	m.RecursionDesired = false
+	m.RecursionDesired = params.RecursionDesired
 	if err := c.sendQuery(m); err != nil {
 		return err
 	}
