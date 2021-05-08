@@ -57,6 +57,7 @@ func DefaultParams(service string) *QueryParam {
 		WantUnicastResponse:  false, // TODO(reddaly): Change this default.
 		AllowPartialResponse: false,
 		QueryType:            dns.TypePTR,
+		RecursionDesired:     false,
 	}
 }
 
