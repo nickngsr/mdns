@@ -36,22 +36,26 @@ func (s *ServiceEntry) complete() bool {
 
 // QueryParam is used to customize how a Lookup is performed
 type QueryParam struct {
-	Service             string               // Service to lookup
-	Domain              string               // Lookup domain, default "local"
-	Timeout             time.Duration        // Lookup timeout, default 1 second
-	Interface           *net.Interface       // Multicast interface to use
-	Entries             chan<- *ServiceEntry // Entries Channel
-	WantUnicastResponse bool                 // Unicast response desired, as per 5.4 in RFC
+	Service              string               // Service to lookup
+	Domain               string               // Lookup domain, default "local"
+	Timeout              time.Duration        // Lookup timeout, default 1 second
+	Interface            *net.Interface       // Multicast interface to use
+	Entries              chan<- *ServiceEntry // Entries Channel
+	WantUnicastResponse  bool                 // Unicast response desired, as per 5.4 in RFC
+	AllowPartialResponse bool                 // Don't try and fill missing fields
+	QueryType            uint16               // Query type, default dns.PTR
 }
 
 // DefaultParams is used to return a default set of QueryParam's
 func DefaultParams(service string) *QueryParam {
 	return &QueryParam{
-		Service:             service,
-		Domain:              "local",
-		Timeout:             time.Second,
-		Entries:             make(chan *ServiceEntry),
-		WantUnicastResponse: false, // TODO(reddaly): Change this default.
+		Service:              service,
+		Domain:               "local",
+		Timeout:              time.Second,
+		Entries:              make(chan *ServiceEntry),
+		WantUnicastResponse:  false, // TODO(reddaly): Change this default.
+		AllowPartialResponse: false,
+		QueryType:            dns.TypePTR,
 	}
 }
 
@@ -102,8 +106,8 @@ type client struct {
 	ipv4MulticastConn *net.UDPConn
 	ipv6MulticastConn *net.UDPConn
 
-	closed   int32
-	closedCh chan struct{} // TODO(reddaly): This doesn't appear to be used.
+	closed int32
+	//closedCh chan struct{} // TODO(reddaly): This doesn't appear to be used.
 }
 
 // NewClient creates a new mdns Client that can be used to query
@@ -142,7 +146,7 @@ func newClient() (*client, error) {
 		ipv6MulticastConn: mconn6,
 		ipv4UnicastConn:   uconn4,
 		ipv6UnicastConn:   uconn6,
-		closedCh:          make(chan struct{}),
+		//closedCh:          make(chan struct{}),
 	}
 	return c, nil
 }
@@ -155,7 +159,7 @@ func (c *client) Close() error {
 	}
 
 	log.Printf("[INFO] mdns: Closing client %v", *c)
-	close(c.closedCh)
+	//close(c.closedCh)
 
 	if c.ipv4UnicastConn != nil {
 		c.ipv4UnicastConn.Close()
@@ -209,7 +213,7 @@ func (c *client) query(params *QueryParam) error {
 
 	// Send the query
 	m := new(dns.Msg)
-	m.SetQuestion(serviceAddr, dns.TypePTR)
+	m.SetQuestion(serviceAddr, params.QueryType)
 	// RFC 6762, section 18.12.  Repurposing of Top Bit of qclass in Question
 	// Section
 	//
@@ -277,7 +281,7 @@ func (c *client) query(params *QueryParam) error {
 			}
 
 			// Check if this entry is complete
-			if inp.complete() {
+			if inp.complete() || params.AllowPartialResponse {
 				if inp.sent {
 					continue
 				}
@@ -344,11 +348,12 @@ func (c *client) recv(l *net.UDPConn, msgCh chan *dns.Msg) {
 			log.Printf("[ERR] mdns: Failed to unpack packet: %v", err)
 			continue
 		}
-		select {
-		case msgCh <- msg:
-		case <-c.closedCh:
-			return
-		}
+		msgCh <- msg
+		//select {
+		//case msgCh <- msg:
+		//case <-c.closedCh:
+		//	return
+		//}
 	}
 }
 
