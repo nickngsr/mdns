@@ -36,28 +36,28 @@ func (s *ServiceEntry) complete() bool {
 
 // QueryParam is used to customize how a Lookup is performed
 type QueryParam struct {
-	Service              string               // Service to lookup
-	Domain               string               // Lookup domain, default "local"
-	Timeout              time.Duration        // Lookup timeout, default 1 second
-	Interface            *net.Interface       // Multicast interface to use
-	Entries              chan<- *ServiceEntry // Entries Channel
-	WantUnicastResponse  bool                 // Unicast response desired, as per 5.4 in RFC
-	AllowPartialResponse bool                 // Don't try and fill missing fields
-	QueryType            uint16               // Query type, default dns.PTR
-	RecursionDesired     bool                 // Set recursion desired
+	Service                string               // Service to lookup
+	Domain                 string               // Lookup domain, default "local"
+	Timeout                time.Duration        // Lookup timeout, default 1 second
+	Interface              *net.Interface       // Multicast interface to use
+	Entries                chan<- *ServiceEntry // Entries Channel
+	WantUnicastResponse    bool                 // Unicast response desired, as per 5.4 in RFC
+	ReturnPartialResponses bool                 // Don't try and fill missing fields
+	QueryType              uint16               // Query type, default dns.PTR
+	RecursionDesired       bool                 // Set recursion desired
 }
 
 // DefaultParams is used to return a default set of QueryParam's
 func DefaultParams(service string) *QueryParam {
 	return &QueryParam{
-		Service:              service,
-		Domain:               "local",
-		Timeout:              time.Second,
-		Entries:              make(chan *ServiceEntry),
-		WantUnicastResponse:  false, // TODO(reddaly): Change this default.
-		AllowPartialResponse: false,
-		QueryType:            dns.TypePTR,
-		RecursionDesired:     false,
+		Service:                service,
+		Domain:                 "local",
+		Timeout:                time.Second,
+		Entries:                make(chan *ServiceEntry),
+		WantUnicastResponse:    false, // TODO(reddaly): Change this default.
+		ReturnPartialResponses: false,
+		QueryType:              dns.TypePTR,
+		RecursionDesired:       false,
 	}
 }
 
@@ -283,13 +283,16 @@ func (c *client) query(params *QueryParam) error {
 			}
 
 			// Check if this entry is complete
-			if inp.complete() || params.AllowPartialResponse {
+			if inp.complete() || params.ReturnPartialResponses {
 				if inp.sent {
 					continue
 				}
 				inp.sent = true
 				select {
 				case params.Entries <- inp:
+					if params.ReturnPartialResponses {
+						delete(inprogress, inp.Name)
+					}
 				default:
 				}
 			} else {
