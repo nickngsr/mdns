@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"os"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -11,6 +12,11 @@ import (
 	"github.com/miekg/dns"
 	"golang.org/x/net/ipv4"
 	"golang.org/x/net/ipv6"
+)
+
+var (
+	// TODO: deal with logs better than an if over every log call, that's rubbish
+	logEnabled = os.Getenv("MDNS_DEBUG") == "1"
 )
 
 // ServiceEntry is returned after we query for a service
@@ -118,11 +124,11 @@ func newClient() (*client, error) {
 	// TODO(reddaly): At least attempt to bind to the port required in the spec.
 	// Create a IPv4 listener
 	uconn4, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
-	if err != nil {
+	if err != nil && logEnabled {
 		log.Printf("[ERR] mdns: Failed to bind to udp4 port: %v", err)
 	}
 	uconn6, err := net.ListenUDP("udp6", &net.UDPAddr{IP: net.IPv6zero, Port: 0})
-	if err != nil {
+	if err != nil && logEnabled {
 		log.Printf("[ERR] mdns: Failed to bind to udp6 port: %v", err)
 	}
 
@@ -131,11 +137,11 @@ func newClient() (*client, error) {
 	}
 
 	mconn4, err := net.ListenMulticastUDP("udp4", nil, ipv4Addr)
-	if err != nil {
+	if err != nil && logEnabled {
 		log.Printf("[ERR] mdns: Failed to bind to udp4 port: %v", err)
 	}
 	mconn6, err := net.ListenMulticastUDP("udp6", nil, ipv6Addr)
-	if err != nil {
+	if err != nil && logEnabled {
 		log.Printf("[ERR] mdns: Failed to bind to udp6 port: %v", err)
 	}
 
@@ -160,7 +166,9 @@ func (c *client) Close() error {
 		return nil
 	}
 
-	log.Printf("[INFO] mdns: Closing client %v", *c)
+	if logEnabled {
+		log.Printf("[INFO] mdns: Closing client %v", *c)
+	}
 	//close(c.closedCh)
 
 	if c.ipv4UnicastConn != nil {
@@ -300,7 +308,7 @@ func (c *client) query(params *QueryParam) error {
 				m := new(dns.Msg)
 				m.SetQuestion(inp.Name, dns.TypePTR)
 				m.RecursionDesired = false
-				if err := c.sendQuery(m); err != nil {
+				if err := c.sendQuery(m); err != nil && logEnabled {
 					log.Printf("[ERR] mdns: Failed to query instance %s: %v", inp.Name, err)
 				}
 			}
@@ -345,12 +353,17 @@ func (c *client) recv(l *net.UDPConn, msgCh chan *dns.Msg) {
 		}
 
 		if err != nil {
-			log.Printf("[ERR] mdns: Failed to read packet: %v", err)
+			if logEnabled {
+				log.Printf("[ERR] mdns: Failed to read packet: %v", err)
+			}
+
 			continue
 		}
 		msg := new(dns.Msg)
 		if err := msg.Unpack(buf[:n]); err != nil {
-			log.Printf("[ERR] mdns: Failed to unpack packet: %v", err)
+			if logEnabled {
+				log.Printf("[ERR] mdns: Failed to unpack packet: %v", err)
+			}
 			continue
 		}
 		msgCh <- msg
