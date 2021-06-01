@@ -1,6 +1,7 @@
 package mdns
 
 import (
+	"errors"
 	"fmt"
 	"log"
 	"net"
@@ -324,18 +325,27 @@ func (c *client) sendQuery(q *dns.Msg) error {
 	if err != nil {
 		return err
 	}
+
+	var ipv4Err error
+	var ipv6Err error
+
 	if c.ipv4UnicastConn != nil {
-		_, err = c.ipv4UnicastConn.WriteToUDP(buf, ipv4Addr)
-		if err != nil {
-			return err
+		_, ipv4Err = c.ipv4UnicastConn.WriteToUDP(buf, ipv4Addr)
+		if logEnabled {
+			log.Printf("[ERR] mdns: Failed to send query on ipv4 %s", ipv4Err)
 		}
 	}
 	if c.ipv6UnicastConn != nil {
-		_, err = c.ipv6UnicastConn.WriteToUDP(buf, ipv6Addr)
-		if err != nil {
-			return err
+		_, ipv6Err = c.ipv6UnicastConn.WriteToUDP(buf, ipv6Addr)
+		if logEnabled {
+			log.Printf("[ERR] mdns: Failed to send query on ipv6 %s", ipv6Err)
 		}
 	}
+
+	if (c.ipv4UnicastConn == nil || ipv4Err != nil) && (c.ipv6UnicastConn == nil || ipv6Err != nil) {
+		return errors.New("failed to query on either ipv4 and ipv6 sockets")
+	}
+
 	return nil
 }
 
