@@ -331,13 +331,13 @@ func (c *client) sendQuery(q *dns.Msg) error {
 
 	if c.ipv4UnicastConn != nil {
 		_, ipv4Err = c.ipv4UnicastConn.WriteToUDP(buf, ipv4Addr)
-		if logEnabled {
+		if ipv4Err != nil && logEnabled {
 			log.Printf("[ERR] mdns: Failed to send query on ipv4 %s", ipv4Err)
 		}
 	}
 	if c.ipv6UnicastConn != nil {
 		_, ipv6Err = c.ipv6UnicastConn.WriteToUDP(buf, ipv6Addr)
-		if logEnabled {
+		if ipv6Err != nil && logEnabled {
 			log.Printf("[ERR] mdns: Failed to send query on ipv6 %s", ipv6Err)
 		}
 	}
